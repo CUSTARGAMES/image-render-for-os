@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-22.04
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Install dependencies
       run: |
@@ -18,7 +18,6 @@ jobs:
       run: |
         if [ ! -f sky.bmp ]; then
           echo "Creating test image..."
-          # Download or create a placeholder
           python3 -c "
           import struct
           # Create minimal 640x480 256-color BMP
@@ -40,21 +39,32 @@ jobs:
               f.write(struct.pack('<i', 2835))  # y pixels/meter
               f.write(struct.pack('<I', 256))   # colors used
               f.write(struct.pack('<I', 0))     # important colors
-              # Palette (blue to white gradient)
+              # Palette (sky gradient: blue to cyan to white)
               for i in range(256):
-                  f.write(bytes([i, i//2, 255-i, 0]))
+                  r = min(255, i)
+                  g = min(255, i // 2 + 100)
+                  b = min(255, 200 - i // 4)
+                  f.write(bytes([b, g, r, 0]))
               # Pixel data (bottom-up)
               for y in range(479, -1, -1):
                   for x in range(640):
-                      f.write(bytes([(x + y) % 256]))
+                      pixel = (x * 256 // 640 + y * 256 // 480) // 2
+                      f.write(bytes([min(255, pixel)]))
           "
+          echo "Test image created successfully"
+        else
+          echo "Using existing sky.bmp"
+          ls -la sky.bmp
         fi
     
-    - name: Build
-      run: make
+    - name: Build OS
+      run: |
+        make
+        ls -la image-viewer.iso
     
     - name: Upload ISO
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: image-viewer-os
         path: image-viewer.iso
+        retention-days: 30
