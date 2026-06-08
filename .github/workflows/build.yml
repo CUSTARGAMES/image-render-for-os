@@ -12,55 +12,59 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-multilib nasm grub-pc-bin grub-common xorriso mtools
+        sudo apt-get install -y \
+          gcc-multilib \
+          nasm \
+          grub-pc-bin \
+          grub-common \
+          xorriso \
+          mtools \
+          grub2-common
     
     - name: Create test image (if no sky.bmp)
       run: |
         if [ ! -f sky.bmp ]; then
-          echo "Creating test image..."
+          echo "Creating test 640x480 256-color BMP..."
           python3 -c "
           import struct
-          # Create minimal 640x480 256-color BMP
+          width, height = 640, 480
           with open('sky.bmp', 'wb') as f:
-              # BMP header
+              # File header
+              data_offset = 54 + 256 * 4
+              file_size = data_offset + width * height
               f.write(b'BM')
-              f.write(struct.pack('<I', 54 + 1024 + 640*480))  # file size
+              f.write(struct.pack('<I', file_size))
               f.write(struct.pack('<HH', 0, 0))
-              f.write(struct.pack('<I', 54 + 1024))  # data offset
-              # DIB header
-              f.write(struct.pack('<I', 40))  # header size
-              f.write(struct.pack('<i', 640))  # width
-              f.write(struct.pack('<i', 480))  # height
-              f.write(struct.pack('<H', 1))    # planes
-              f.write(struct.pack('<H', 8))    # bpp
-              f.write(struct.pack('<I', 0))    # compression
-              f.write(struct.pack('<I', 640*480))  # image size
-              f.write(struct.pack('<i', 2835))  # x pixels/meter
-              f.write(struct.pack('<i', 2835))  # y pixels/meter
-              f.write(struct.pack('<I', 256))   # colors used
-              f.write(struct.pack('<I', 0))     # important colors
-              # Palette (sky gradient: blue to cyan to white)
+              f.write(struct.pack('<I', data_offset))
+              # Info header
+              f.write(struct.pack('<I', 40))
+              f.write(struct.pack('<i', width))
+              f.write(struct.pack('<i', height))
+              f.write(struct.pack('<H', 1))
+              f.write(struct.pack('<H', 8))
+              f.write(struct.pack('<I', 0))
+              f.write(struct.pack('<I', width * height))
+              f.write(struct.pack('<i', 2835))
+              f.write(struct.pack('<i', 2835))
+              f.write(struct.pack('<I', 256))
+              f.write(struct.pack('<I', 256))
+              # Palette
               for i in range(256):
-                  r = min(255, i)
-                  g = min(255, i // 2 + 100)
-                  b = min(255, 200 - i // 4)
-                  f.write(bytes([b, g, r, 0]))
-              # Pixel data (bottom-up)
-              for y in range(479, -1, -1):
-                  for x in range(640):
-                      pixel = (x * 256 // 640 + y * 256 // 480) // 2
-                      f.write(bytes([min(255, pixel)]))
+                  f.write(bytes([i//2, i//3 + 50, i, 0]))
+              # Pixels (bottom-up)
+              for y in range(height - 1, -1, -1):
+                  row = bytes([(x + y) % 256 for x in range(width)])
+                  f.write(row)
           "
-          echo "Test image created successfully"
-        else
-          echo "Using existing sky.bmp"
           ls -la sky.bmp
         fi
     
-    - name: Build OS
+    - name: Build ISO
       run: |
         make
         ls -la image-viewer.iso
+        # Verify ISO is bootable
+        file image-viewer.iso
     
     - name: Upload ISO
       uses: actions/upload-artifact@v4
